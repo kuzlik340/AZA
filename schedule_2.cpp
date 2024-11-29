@@ -45,39 +45,28 @@ struct Job{
 const int n = 100; // Maximum number of elements in the universe
 vector<NodeType> U(n + 1); // Universe array indexed from 1 to n
 
-// Print sets as graphical trees
-void printSets(int maxIndex) {
-    cout << "\nDisjoint Sets (as Trees):\n";
 
-    // Iterate over all nodes to find roots and print their trees
-    for (int i = 1; i <= maxIndex; ++i) {
-        // Find the root of the current set
-        if (U[i].parent == i) { // Root node
-            cout << "Tree rooted at " << i << ":\n";
+// Find the root of the set containing `x`, with path compression
+void compress_path(int x) {
+    int root = x;
 
-            // Use a queue for BFS to print the tree structure
-            std::queue<std::pair<int, int>> q; // Pair: (node, depth)
-            q.push({i, 0});
-            while (!q.empty()) {
-                auto [current, depth] = q.front();
-                q.pop();
-
-                // Indentation for visualization
-                for (int j = 0; j < depth; ++j) {
-                    cout << "  ";
-                }
-                cout << current << " (smallest: " << U[current].smallest << ")\n";
-
-                // Add children to the queue
-                for (int j = 1; j <= maxIndex; ++j) {
-                    if (U[j].parent == current && j != current) {
-                        q.push({j, depth + 1});
-                    }
-                }
-            }
-            cout << endl;
-        }
+    // Traverse up the tree to find the root
+    while (U[root].parent != root) {
+        root = U[root].parent;
     }
+
+    // Compress the path: update the parent of each node visited to point directly to the root
+    while (x != root) {
+        int temp = U[x].parent; // Store the current parent
+        U[x].parent = root;     // Update the parent to the root
+        x = temp;               // Move up the tree
+    }
+}
+
+
+// Modify the `small()` function to use `findRoot`
+int small(int p) {
+    return U[(U[p].parent)].smallest;
 }
 
 
@@ -88,39 +77,40 @@ void makeset(int i) {
     U[i].smallest = i;     // The only element in the set is the smallest
 }
 
-// Merge two sets represented by `p` and `q`
 void merge(int p, int q) {
-    // If the depths are equal
-    if (U[p].depth == U[q].depth) {
-        U[p].depth += 1;     // Increase the depth of the tree
-        U[q].parent = p;     // Make `p` the parent of `q`
-        if (U[q].smallest < U[p].smallest) {
-            U[p].smallest = U[q].smallest; // Update the smallest element
+    // Find the roots of both sets
+    int rootP = U[p].parent; 
+    int rootQ = U[q].parent;
+
+    // If the roots are the same, no need to merge
+    if (rootP == rootQ) return;
+
+    if (U[rootP].depth == U[rootQ].depth) {
+        U[rootP].depth += 1;     // Increase the depth of the tree
+        U[rootQ].parent = p;     // Make `p` the parent of `q`
+        if (U[rootQ].smallest < U[rootP].smallest) {
+            U[rootP].smallest = U[rootQ].smallest; // Update the smallest element
         }
     }
     // If the depth of `p` is less than the depth of `q`
-    else if (U[p].depth < U[q].depth) {
-        U[p].parent = q;     // Make `q` the parent of `p`
-        if (U[p].smallest < U[q].smallest) {
-            U[q].smallest = U[p].smallest; // Update the smallest element
+    else if (U[rootP].depth < U[rootQ].depth) {
+        U[rootP].parent = q;     // Make `q` the parent of `p`
+        if (U[rootP].smallest < U[rootQ].smallest) {
+            U[rootQ].smallest = U[rootP].smallest; // Update the smallest element
         }
     }
     // Otherwise, `p`'s depth is greater than `q`'s depth
     else {
-        U[q].parent = p;     // Make `p` the parent of `q`
-        if (U[q].smallest < U[p].smallest) {
-            U[p].smallest = U[q].smallest; // Update the smallest element
+        U[rootQ].parent = p;     // Make `p` the parent of `q`
+        if (U[rootQ].smallest < U[rootP].smallest) {
+            U[rootP].smallest = U[rootQ].smallest; // Update the smallest element
         }
     }
+    compress_path(p);
+    compress_path(q);
 }
 
-// Find the smallest element in the set containing `p`
-int small(int p) {
-    if (U[p].parent != p) {
-        U[p].parent = small(U[p].parent);
-    }
-    return U[p].smallest;
-}
+
 
 
 void initial(int d){
@@ -151,7 +141,6 @@ void schedule(const vector<Job>& jobs, vector<Job>& J) {
     /* main cycle for jobs */
     for (const Job& job : jobs) {
         int availableSlot = small(job.deadline);
-        cout << "Job ID : " << job.id << "Has this small() " << availableSlot << endl;
         if (availableSlot != 0) {
             // Reserve the slot by merging it with the previous slot
             merge(availableSlot, availableSlot - 1);
@@ -159,7 +148,6 @@ void schedule(const vector<Job>& jobs, vector<Job>& J) {
             // Add the job to the schedule
             J[availableSlot-1] = job;
         }
-        printSets(maxDeadline);
     }
 }    
 
@@ -173,34 +161,37 @@ int main(){
         {4, 2, 20}, 
         {5, 3, 10}, 
         {6, 1, 45}, 
-        {7, 1, 55}};
+        {7, 1, 55}
+    };
 
     vector<Job> J{};
-
+    cout << "\nInput table\n" << endl;
+    for (Job& job : jobs) {
+        cout << "Job ID: " << job.id << " |  Deadline: " << job.deadline << " |  Profit: " << job.profit << endl;
+    }
+    cout << "\nSorted table\n" << endl;
 
     sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) {
         return a.profit > b.profit;
     });
 
-
-    for (const Job& job : jobs) {
-        cout << "\tJob ID: " << job.id << " |  Deadline: " << job.deadline << " |  Profit: " << job.profit << endl;
+    for (Job& job : jobs) {
+        cout << "Job ID: " << job.id << " |  Deadline: " << job.deadline << " |  Profit: " << job.profit << endl;
     }
 
     schedule(jobs, J);
 
-    cout << "\nAfter schedulling" << endl;
+    cout << "\nAfter schedulling\n" << endl;
 
     int profit_total = 0;
     int i = 1;
-    for (const Job& job : J) {
-        if (job.id != 0){
-            cout << "\033[34mDAY " << i++ << ": \033[0m" << "Job ID: " << job.id << " |  Deadline: " << job.deadline << " |  Profit: " << job.profit << endl;
-            profit_total += job.profit;
-        }
+
+    for (Job& job : J) {
+        cout << "\033[34mDAY " << i++ << ": \033[0m" << "Job ID: " << job.id << " |  Deadline: " << job.deadline << " |  Profit: " << job.profit << endl;
+        profit_total += job.profit;
     }
 
-    cout << "Total profit: " << profit_total << endl;
+    cout << "Total profit: " << profit_total << "\n" << endl;
 
 
     return 0;
